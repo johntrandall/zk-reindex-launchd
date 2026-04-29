@@ -4,16 +4,30 @@ A set-and-forget background reindexer for [zk](https://github.com/zk-org/zk) (th
 
 ## Why
 
-[`zk index`](https://github.com/zk-org/zk) is incremental and fast — but it's manual. Every edit you make is invisible to `zk list`, `zk graph`, the [zk LSP](https://zk-org.github.io/zk/tips/editors-integration.html), or any MCP/agent layer over zk until you remember to run `zk index`. With one notebook that's annoying. With several scattered across your Mac (a writing vault, a research notebook, project-level ADR repos, an Obsidian vault) it's a constant low-grade tax.
+[`zk index`](https://github.com/zk-org/zk) is incremental and fast — but it's manual. Every edit you make is invisible to `zk list`, `zk graph`, the [zk LSP](https://zk-org.github.io/zk/tips/editors-integration.html), or any consumer that doesn't auto-reindex on its own. The zk LSP auto-reindexes when *the LSP itself* saves the file. Some MCP wrappers like [`koei-kaji/zk-utils`](https://github.com/koei-kaji/zk-utils) auto-reindex on every tool call. But anything else — the bare CLI from a shell, edits via sync tools, mobile note apps writing to the vault, AI agents writing markdown directly to disk — leaves the index stale until a privileged consumer triggers a refresh.
+
+This tool fills that gap. It runs `zk index` on a schedule, so *every* consumer (CLI, LSP, MCP, your editor's command palette) sees a current view.
 
 **The set-and-forget pattern:**
 
 1. `zk init` your notebooks wherever they live.
 2. List them once in `~/.config/zk-reindex-launchd/notebooks.conf` (one path per line, optional `:maxdepth`).
 3. Install the LaunchAgent.
-4. **Done.** From now on, every query — `zk list --link-to ADR-000.md`, an MCP server's `get_linking_notes`, your editor's LSP backlinks — sees a current index. You never type `zk index` again.
+4. **Done.** Every consumer of [zk-org/zk](https://github.com/zk-org/zk) on your Mac sees a fresh index within ~5 min.
 
 The agent polls every 5 minutes (configurable). Idle cost is ~200ms wall time and zero SSD writes per cycle — well below the noise floor of macOS background work like Spotlight, Time Machine, or any cloud sync.
+
+### When you don't need this
+
+- **You only ever query zk through `koei-kaji/zk-utils` or another auto-indexing MCP.** That MCP runs `zk index` for you on every call. Our launchd is redundant for that path (no harm, but no value either).
+- **You only edit through an LSP-aware editor** (Neovim/VSCode/Emacs with the zk LSP) and never touch the vault from anywhere else. The LSP handles its own saves.
+
+### When you do need this
+
+- You use the `zk` CLI from a shell (`zk list`, `zk graph`, `zk-fzf`).
+- You have multiple zk consumers and want them all current at all times.
+- Notes get written by anything that bypasses zk — sync tools, mobile clients, AI agents writing files directly.
+- You don't want to think about it.
 
 ## What it solves vs. what it doesn't
 
