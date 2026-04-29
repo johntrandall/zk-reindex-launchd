@@ -9,12 +9,28 @@
 # Performance: when nothing changed, zk uses mtime+size checks before
 # re-parsing — typical run is <1s wall time and ~zero SSD writes.
 #
-# Configuration via env vars:
-#   ZK_BIN               Path to the `zk` binary. Default: zk on PATH.
-#   ZK_REINDEX_ROOTS     Colon-separated list of roots to scan.
-#                        Default: $HOME (whole home directory)
-#   ZK_REINDEX_EXCLUDES  Colon-separated additional paths to prune.
-#                        Merged with the built-in exclusion list.
+# Configuration:
+#   ~/.config/zk-reindex-launchd/notebooks.conf — primary config (if exists).
+#     One root per line. Format: <path>[:<maxdepth>]
+#     Lines starting with # are comments; blank lines are ignored.
+#     Examples:
+#       /Users/me/admin-technical          # full-depth scan
+#       /Users/me/dev:2                    # only descend 2 levels (good for
+#                                          #   <root>/<project>/.zk lookup;
+#                                          #   skips deep repo subtrees)
+#
+# Env vars:
+#   ZK_BIN                       Path to the `zk` binary. Default: zk on PATH.
+#   ZK_REINDEX_CONFIG            Override config file path. Default:
+#                                $XDG_CONFIG_HOME/zk-reindex-launchd/notebooks.conf
+#                                (falls back to ~/.config/...).
+#   ZK_REINDEX_ROOTS             Colon-separated list of roots to scan
+#                                (no per-root depth control). Used only if
+#                                no config file exists.
+#   ZK_REINDEX_EXCLUDES          Colon-separated additional paths to prune.
+#                                Merged with the built-in exclusion list.
+#
+# Resolution order: config file > ZK_REINDEX_ROOTS env var > defaults.
 #
 # Exit code: number of notebooks that errored during reindex (0 on success).
 
@@ -28,25 +44,45 @@ if ! command -v "$ZK" >/dev/null 2>&1; then
   exit 1
 fi
 
-# --- Roots -------------------------------------------------------------------
-# Default: a small allowlist of common user-notebook locations. Override with
-# ZK_REINDEX_ROOTS (colon-separated) to add your own.
-#
-# Why not scan all of $HOME? Even with aggressive prunes, walking through a
-# typical ~/dev (many cloned repos, deeply nested) takes 5-10+ seconds per
-# cycle. The allowlist keeps the no-op cost under ~1 second on most Macs.
-# If you want broader scans, set ZK_REINDEX_ROOTS=$HOME (or a list).
-if [[ -n "${ZK_REINDEX_ROOTS:-}" ]]; then
-  IFS=':' read -ra ROOTS <<< "$ZK_REINDEX_ROOTS"
+# --- Roots + per-root depth --------------------------------------------------
+# Build two parallel arrays: ROOT_PATHS (the paths) and ROOT_DEPTHS (maxdepth
+# per root, "" means no limit). Resolution order:
+#   1. Config file (~/.config/zk-reindex-launchd/notebooks.conf)
+#   2. ZK_REINDEX_ROOTS env var (no per-root depth control)
+#   3. Built-in defaults (common notebook locations)
+
+ROOT_PATHS=()
+ROOT_DEPTHS=()
+
+CONFIG_FILE="${ZK_REINDEX_CONFIG:-${XDG_CONFIG_HOME:-$HOME/.config}/zk-reindex-launchd/notebooks.conf}"
+
+if [[ -f "$CONFIG_FILE" ]]; then
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    # Strip trailing whitespace; skip blank lines and comments.
+    line="${line%%#*}"
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line%"${line##*[![:space:]]}"}"
+    [[ -z "$line" ]] && continue
+
+    if [[ "$line" =~ ^(.+):([0-9]+)$ ]]; then
+      ROOT_PATHS+=("${BASH_REMATCH[1]}")
+      ROOT_DEPTHS+=("${BASH_REMATCH[2]}")
+    else
+      ROOT_PATHS+=("$line")
+      ROOT_DEPTHS+=("")
+    fi
+  done < "$CONFIG_FILE"
+elif [[ -n "${ZK_REINDEX_ROOTS:-}" ]]; then
+  IFS=':' read -ra _R <<< "$ZK_REINDEX_ROOTS"
+  for r in "${_R[@]}"; do
+    ROOT_PATHS+=("$r")
+    ROOT_DEPTHS+=("")
+  done
 else
-  ROOTS=(
-    "$HOME/Documents"
-    "$HOME/Desktop"
-    "$HOME/notes"
-    "$HOME/Notes"
-    "$HOME/Obsidian"
-    "$HOME/Vault"
-  )
+  for r in "$HOME/Documents" "$HOME/Desktop" "$HOME/notes" "$HOME/Notes" "$HOME/Obsidian" "$HOME/Vault"; do
+    ROOT_PATHS+=("$r")
+    ROOT_DEPTHS+=("")
+  done
 fi
 
 # --- Exclusions: paths (top-level prunes under $HOME) ------------------------
@@ -212,11 +248,19 @@ build_find_args() {
 mapfile -t FIND_ARGS < <(build_find_args)
 
 raw=()
-for root in "${ROOTS[@]}"; do
+for i in "${!ROOT_PATHS[@]}"; do
+  root="${ROOT_PATHS[$i]}"
+  depth="${ROOT_DEPTHS[$i]}"
   [[ -d "$root" ]] || continue
-  while IFS= read -r -d '' zk_dir; do
-    raw+=("$(dirname "$zk_dir")")
-  done < <(find "$root" "${FIND_ARGS[@]}" 2>/dev/null)
+  if [[ -n "$depth" ]]; then
+    while IFS= read -r -d '' zk_dir; do
+      raw+=("$(dirname "$zk_dir")")
+    done < <(find "$root" -maxdepth "$depth" "${FIND_ARGS[@]}" 2>/dev/null)
+  else
+    while IFS= read -r -d '' zk_dir; do
+      raw+=("$(dirname "$zk_dir")")
+    done < <(find "$root" "${FIND_ARGS[@]}" 2>/dev/null)
+  fi
 done
 
 # Dedupe nested notebooks: a child .zk/ inside another notebook (e.g. a git

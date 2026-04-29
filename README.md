@@ -59,32 +59,44 @@ trash ~/Library/Logs/zk-reindex-all.log
 
 ## Configuration
 
-The script reads three optional environment variables:
+### Primary: config file with per-root depth
+
+`~/.config/zk-reindex-launchd/notebooks.conf` (created automatically if you run `bin/install.sh`, or hand-author it):
+
+```
+# zk-reindex-launchd: notebooks to reindex
+# Format: <path>[:<maxdepth>]
+# Lines starting with # are comments; blank lines are ignored.
+
+# Canonical knowledge base — depth 2 catches <root>/.zk and <root>/<sub>/.zk
+/Users/me/admin-technical:2
+
+# Obsidian vault — full-depth scan
+/Users/me/Obsidian
+
+# Active dev projects — only catch <project>/.zk, skip repo subtrees
+/Users/me/dev:2
+```
+
+**Hot-reloadable:** edits take effect on the next cycle, no `launchctl` reload needed.
+
+**Why per-root depth?** Some roots have notebooks at known depth (e.g., `~/dev/<project>/.zk`); descending arbitrarily into project subtrees is wasted work and slows the scan from ~200 ms to multiple seconds. Set `maxdepth=2` for those. Use no depth for vaults where notebooks may be nested arbitrarily.
+
+### Fallback: env vars
+
+If no config file exists, the script reads:
 
 | Variable | Default | Effect |
 |---|---|---|
-| `ZK_BIN` | `zk` (PATH) | Path to the `zk` binary |
-| `ZK_REINDEX_ROOTS` | `$HOME` | Colon-separated list of scan roots |
-| `ZK_REINDEX_EXCLUDES` | (none) | Colon-separated extra paths to prune (in addition to built-in list) |
+| `ZK_BIN` | `zk` on PATH | Path to the `zk` binary |
+| `ZK_REINDEX_CONFIG` | `~/.config/zk-reindex-launchd/notebooks.conf` | Override config file path |
+| `ZK_REINDEX_ROOTS` | (built-in defaults) | Colon-separated roots, no per-root depth |
+| `ZK_REINDEX_EXCLUDES` | (none) | Extra paths to prune (merged with built-in list) |
 
-To set them in the LaunchAgent, add to the `EnvironmentVariables` dict in the plist:
+Built-in defaults (when neither config file nor `ZK_REINDEX_ROOTS` is set):
+`~/Documents`, `~/Desktop`, `~/notes`, `~/Notes`, `~/Obsidian`, `~/Vault`.
 
-```xml
-<key>EnvironmentVariables</key>
-<dict>
-    <key>PATH</key>
-    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
-    <key>ZK_REINDEX_ROOTS</key>
-    <string>/Users/you/notes:/Users/you/work-vault</string>
-</dict>
-```
-
-After editing the plist, reload it:
-
-```bash
-launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.zk-reindex-all.plist
-launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zk-reindex-all.plist
-```
+Resolution order: **config file → `ZK_REINDEX_ROOTS` → defaults**. The first one set wins.
 
 ## Built-in exclusion list
 
