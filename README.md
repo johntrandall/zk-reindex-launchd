@@ -34,6 +34,18 @@ The agent polls every 5 minutes (configurable). Idle cost is ~200ms wall time an
 
 ## Install
 
+### Homebrew (recommended)
+
+```bash
+brew tap johntrandall/tap
+brew install johntrandall/tap/zk-reindex-launchd
+brew services start johntrandall/tap/zk-reindex-launchd
+```
+
+The formula seeds a starter config at `~/.config/zk-reindex-launchd/notebooks.conf`, declares a dependency on `zk`, and registers the LaunchAgent via `brew services`.
+
+### Manual
+
 ```bash
 git clone https://github.com/johntrandall/zk-reindex-launchd.git
 cd zk-reindex-launchd
@@ -63,6 +75,16 @@ tail -f ~/Library/Logs/zk-reindex-all.log
 ```
 
 ## Uninstall
+
+If installed via Homebrew:
+
+```bash
+brew services stop johntrandall/tap/zk-reindex-launchd
+brew uninstall zk-reindex-launchd
+brew untap johntrandall/tap   # optional, if no other formulae from this tap
+```
+
+If installed manually:
 
 ```bash
 ./uninstall.sh           # keeps your notebooks.conf
