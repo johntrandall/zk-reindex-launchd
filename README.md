@@ -1,12 +1,28 @@
 # zk-reindex-launchd
 
-Auto-reindex all your [zk](https://github.com/zk-org/zk) notebooks on macOS via a single LaunchAgent. Polls every 60 seconds, auto-discovers new notebooks, costs essentially nothing on idle.
+A set-and-forget background reindexer for [zk](https://github.com/zk-org/zk) (the plain-text Zettelkasten CLI) on macOS. One LaunchAgent quietly runs [`zk index`](https://zk-org.github.io/zk/notes/note-frontmatter.html) across every notebook on your Mac on a schedule. Install once, edit your notes for years, never think about indexing again.
 
 ## Why
 
-`zk` doesn't auto-update its index when files change. A new note or edit means stale results from `zk list`, `zk graph`, or any MCP/LSP layer over zk — until you remember to run `zk index`. This tool runs `zk index` for you across every notebook on your Mac, so queries always return current data.
+[`zk index`](https://github.com/zk-org/zk) is incremental and fast — but it's manual. Every edit you make is invisible to `zk list`, `zk graph`, the [zk LSP](https://zk-org.github.io/zk/tips/editors-integration.html), or any MCP/agent layer over zk until you remember to run `zk index`. With one notebook that's annoying. With several scattered across your Mac (a writing vault, a research notebook, project-level ADR repos, an Obsidian vault) it's a constant low-grade tax.
 
-It works for any number of notebooks scattered across your home directory. You don't list them — the script discovers them by scanning for `.zk/` folders.
+**The set-and-forget pattern:**
+
+1. `zk init` your notebooks wherever they live.
+2. List them once in `~/.config/zk-reindex-launchd/notebooks.conf` (one path per line, optional `:maxdepth`).
+3. Install the LaunchAgent.
+4. **Done.** From now on, every query — `zk list --link-to ADR-000.md`, an MCP server's `get_linking_notes`, your editor's LSP backlinks — sees a current index. You never type `zk index` again.
+
+The agent polls every 5 minutes (configurable). Idle cost is ~200ms wall time and zero SSD writes per cycle — well below the noise floor of macOS background work like Spotlight, Time Machine, or any cloud sync.
+
+## What it solves vs. what it doesn't
+
+| Solves | Doesn't solve |
+|---|---|
+| Stale `zk index` after edits | Editing/authoring notes (use your editor) |
+| Notebooks scattered across folders | Cross-notebook queries (zk is per-notebook) |
+| Forgetting to reindex after `git pull` | Real-time sub-second freshness (use a file watcher if you need that) |
+| Running `zk index` on N machines | Syncing the notebook itself (use git, iCloud, etc.) |
 
 ## Design choices
 
