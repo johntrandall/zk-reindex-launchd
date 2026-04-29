@@ -1,0 +1,8 @@
+# macOS
+.DS_Store
+
+# Editor / tool detritus
+*.swp
+*.swo
+.vscode/
+.idea/

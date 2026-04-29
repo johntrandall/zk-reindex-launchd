@@ -1,0 +1,181 @@
+#!/usr/bin/env bash
+# zk-reindex-all — auto-discover .zk/ notebooks and reindex each.
+#
+# Designed to run periodically (e.g. via launchd StartInterval=60).
+# Stateless: each invocation does a fresh `find` for .zk/ directories.
+# New notebooks created via `zk init` anywhere under the scan roots are
+# picked up on the next cycle — no service restart needed.
+#
+# Performance: when nothing changed, zk uses mtime+size checks before
+# re-parsing — typical run is <1s wall time and ~zero SSD writes.
+#
+# Configuration via env vars:
+#   ZK_BIN               Path to the `zk` binary. Default: zk on PATH.
+#   ZK_REINDEX_ROOTS     Colon-separated list of roots to scan.
+#                        Default: $HOME (whole home directory)
+#   ZK_REINDEX_EXCLUDES  Colon-separated additional paths to prune.
+#                        Merged with the built-in exclusion list.
+#
+# Exit code: number of notebooks that errored during reindex (0 on success).
+
+set -uo pipefail
+
+ZK="${ZK_BIN:-zk}"
+TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+if ! command -v "$ZK" >/dev/null 2>&1; then
+  echo "[$TIMESTAMP] FATAL: zk not found (set ZK_BIN, or install via 'brew install zk')"
+  exit 1
+fi
+
+# --- Roots -------------------------------------------------------------------
+# Default: scan the user's entire home directory. Pruned at directory
+# boundaries by EXCLUDE_PATHS / EXCLUDE_NAMES below, so the walk is fast.
+if [[ -n "${ZK_REINDEX_ROOTS:-}" ]]; then
+  IFS=':' read -ra ROOTS <<< "$ZK_REINDEX_ROOTS"
+else
+  ROOTS=("$HOME")
+fi
+
+# --- Exclusions: paths (top-level prunes under $HOME) ------------------------
+# These are full paths whose entire subtree is skipped. macOS-flavored.
+EXCLUDE_PATHS=(
+  # Apple-managed system data, app prefs, iCloud cache, Mail, etc.
+  "$HOME/Library"
+
+  # Apple-bundled media libraries (and their parent folders, which never
+  # contain dev docs anyway).
+  "$HOME/Pictures"
+  "$HOME/Music"
+  "$HOME/Movies"
+
+  # Legacy / rarely-used macOS folders.
+  "$HOME/Applications"
+  "$HOME/Public"
+  "$HOME/Sites"
+  "$HOME/Downloads"
+
+  # Trash variants and Time Machine local snapshots.
+  "$HOME/.Trash"
+  "$HOME/.Trashes"
+  "$HOME/.tmutil"
+
+  # Cloud sync caches (the actual sync mounts vary by service).
+  "$HOME/.dropbox.cache"
+
+  # Virtual machines (disk images can be tens of GB; never contain notebooks).
+  "$HOME/.lume"
+  "$HOME/.tart"
+  "$HOME/.utm"
+  "$HOME/.colima"
+  "$HOME/.lima"
+  "$HOME/.orbstack"
+  "$HOME/OrbStack"
+  "$HOME/Parallels"
+  "$HOME/VirtualBox VMs"
+  "$HOME/.vagrant.d"
+)
+
+# Optional user-supplied extras
+if [[ -n "${ZK_REINDEX_EXCLUDES:-}" ]]; then
+  IFS=':' read -ra EXTRA <<< "$ZK_REINDEX_EXCLUDES"
+  EXCLUDE_PATHS+=("${EXTRA[@]}")
+fi
+
+# --- Exclusions: directory names (pruned at any depth) -----------------------
+EXCLUDE_NAMES=(
+  # SCM internals
+  .git .hg .svn
+
+  # Package-manager / language caches
+  node_modules .npm .pnpm-store .yarn
+  .cargo .rustup .gem .nvm .rvm .pyenv
+  .gradle .m2 .ivy2 .sbt
+  .docker .vagrant .android
+
+  # Python virtualenvs and tool caches
+  .venv venv __pycache__ .pytest_cache .mypy_cache .ruff_cache .ipynb_checkpoints
+
+  # Build artifacts
+  target build dist out .next .nuxt .svelte-kit .turbo
+
+  # General caches
+  .cache .ccache .terraform
+)
+
+# --- Bundle-name prunes (Apple "package" directories) ------------------------
+EXCLUDE_GLOBS=(
+  '*.photoslibrary' '*.musiclibrary' '*.tvlibrary' '*.imovielibrary'
+  '*.fcpbundle' '*.logicx' '*.band' '*.aplibrary'
+  # OmniGraffle / OmniOutliner / OmniPlan bundles
+  '*.graffle' '*.ooutline' '*.oplx'
+  # Final Cut / Motion bundles
+  '*.fcpevent' '*.fcpproject'
+  # Xcode workspace bundles (the `.xcworkspace`/`.xcodeproj` are dirs)
+  '*.xcworkspace' '*.xcodeproj'
+)
+
+# --- Build the find expression -----------------------------------------------
+build_find_args() {
+  local args=()
+  local first=true
+  for p in "${EXCLUDE_PATHS[@]}"; do
+    if $first; then args+=( '(' -path "$p" ); first=false
+    else            args+=( -o -path "$p" ); fi
+  done
+  for n in "${EXCLUDE_NAMES[@]}"; do
+    if $first; then args+=( '(' -name "$n" ); first=false
+    else            args+=( -o -name "$n" ); fi
+  done
+  for g in "${EXCLUDE_GLOBS[@]}"; do
+    args+=( -o -name "$g" )
+  done
+  args+=( ')' -prune -o -name '.zk' -type d -print0 )
+  printf '%s\n' "${args[@]}"
+}
+
+# --- Discover notebooks ------------------------------------------------------
+mapfile -t FIND_ARGS < <(build_find_args)
+
+raw=()
+for root in "${ROOTS[@]}"; do
+  [[ -d "$root" ]] || continue
+  while IFS= read -r -d '' zk_dir; do
+    raw+=("$(dirname "$zk_dir")")
+  done < <(find "$root" "${FIND_ARGS[@]}" 2>/dev/null)
+done
+
+# Dedupe nested notebooks: a child .zk/ inside another notebook (e.g. a git
+# submodule that is itself a notebook clone) is skipped — the parent is
+# canonical.
+notebooks=()
+for nb in "${raw[@]}"; do
+  nested=false
+  for other in "${raw[@]}"; do
+    [[ "$nb" == "$other" ]] && continue
+    if [[ "$nb" == "$other"/* ]]; then
+      nested=true
+      break
+    fi
+  done
+  $nested || notebooks+=("$nb")
+done
+
+if [[ ${#notebooks[@]} -eq 0 ]]; then
+  echo "[$TIMESTAMP] no notebooks under: ${ROOTS[*]}"
+  exit 0
+fi
+
+# --- Reindex each ------------------------------------------------------------
+errors=0
+for nb in "${notebooks[@]}"; do
+  if out=$(cd "$nb" && "$ZK" index 2>&1); then
+    summary="$(echo "$out" | tail -1 | tr -s ' ')"
+    echo "[$TIMESTAMP] $nb — $summary"
+  else
+    errors=$((errors + 1))
+    echo "[$TIMESTAMP] $nb — ERROR: $(echo "$out" | tr '\n' ' ')"
+  fi
+done
+
+exit "$errors"

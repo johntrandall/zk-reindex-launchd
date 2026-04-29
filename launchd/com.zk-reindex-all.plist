@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Template plist for zk-reindex-all.
+
+  Install:
+    sed "s|__HOME__|$HOME|g" launchd/com.zk-reindex-all.plist \
+      > ~/Library/LaunchAgents/com.zk-reindex-all.plist
+    launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.zk-reindex-all.plist
+
+  Disable:
+    launchctl bootout gui/$(id -u) ~/Library/LaunchAgents/com.zk-reindex-all.plist
+
+  Logs: ~/Library/Logs/zk-reindex-all.log
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.zk-reindex-all</string>
+
+    <key>ServiceDescription</key>
+    <string>Periodically reindexes all zk notebooks on this Mac so queries (via the zk CLI or zk-mcp) return current backlink/tag/FTS results.
+
+Runs __HOME__/.local/bin/zk-reindex-all every 60 seconds (StartInterval), and once at user login (RunAtLoad). The script auto-discovers .zk/ directories under $HOME with smart exclusions (Library, media libraries, VM disks, container caches, package-manager caches). New notebooks created via `zk init` anywhere under the scan roots are picked up on the next cycle — no service restart needed.
+
+Cost: typical run is &lt;1s wall time and ~zero SSD writes when nothing changed (zk uses mtime+size checks before re-parsing). Comparable to other always-on macOS background work (Spotlight, Time Machine, cloud sync).
+
+Configuration via env vars (set in EnvironmentVariables below or shell):
+  ZK_BIN              Path to zk binary (default: looks on PATH)
+  ZK_REINDEX_ROOTS    Colon-separated scan roots (default: $HOME)
+  ZK_REINDEX_EXCLUDES Colon-separated extra paths to prune
+
+Logs: __HOME__/Library/Logs/zk-reindex-all.log
+Source: https://github.com/&lt;your-username&gt;/zk-reindex-launchd</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>__HOME__/.local/bin/zk-reindex-all</string>
+    </array>
+
+    <key>StartInterval</key>
+    <integer>60</integer>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+
+    <key>LowPriorityIO</key>
+    <true/>
+
+    <key>Nice</key>
+    <integer>5</integer>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/Library/Logs/zk-reindex-all.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/Library/Logs/zk-reindex-all.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+</dict>
+</plist>
