@@ -29,18 +29,31 @@ if ! command -v "$ZK" >/dev/null 2>&1; then
 fi
 
 # --- Roots -------------------------------------------------------------------
-# Default: scan the user's entire home directory. Pruned at directory
-# boundaries by EXCLUDE_PATHS / EXCLUDE_NAMES below, so the walk is fast.
+# Default: a small allowlist of common user-notebook locations. Override with
+# ZK_REINDEX_ROOTS (colon-separated) to add your own.
+#
+# Why not scan all of $HOME? Even with aggressive prunes, walking through a
+# typical ~/dev (many cloned repos, deeply nested) takes 5-10+ seconds per
+# cycle. The allowlist keeps the no-op cost under ~1 second on most Macs.
+# If you want broader scans, set ZK_REINDEX_ROOTS=$HOME (or a list).
 if [[ -n "${ZK_REINDEX_ROOTS:-}" ]]; then
   IFS=':' read -ra ROOTS <<< "$ZK_REINDEX_ROOTS"
 else
-  ROOTS=("$HOME")
+  ROOTS=(
+    "$HOME/Documents"
+    "$HOME/Desktop"
+    "$HOME/notes"
+    "$HOME/Notes"
+    "$HOME/Obsidian"
+    "$HOME/Vault"
+  )
 fi
 
 # --- Exclusions: paths (top-level prunes under $HOME) ------------------------
 # These are full paths whose entire subtree is skipped. macOS-flavored.
 EXCLUDE_PATHS=(
-  # Apple-managed system data, app prefs, iCloud cache, Mail, etc.
+  # Apple-managed system data, app prefs, iCloud cache, Mail, Containers,
+  # CloudStorage (modern File Provider mounts for Drive/OneDrive/Box/Dropbox).
   "$HOME/Library"
 
   # Apple-bundled media libraries (and their parent folders, which never
@@ -59,9 +72,29 @@ EXCLUDE_PATHS=(
   "$HOME/.Trash"
   "$HOME/.Trashes"
   "$HOME/.tmutil"
+  "$HOME/.MobileBackups"
 
-  # Cloud sync caches (the actual sync mounts vary by service).
+  # macOS volume metadata (can appear under $HOME on attached volumes).
+  "$HOME/.fseventsd"
+  "$HOME/.Spotlight-V100"
+  "$HOME/.DocumentRevisions-V100"
+  "$HOME/.TemporaryItems"
+
+  # Legacy cloud-sync mount roots (modern installs use Library/CloudStorage,
+  # already covered by the Library prune). SQLite-vs-sync race risk.
+  "$HOME/Dropbox"
   "$HOME/.dropbox.cache"
+  "$HOME/OneDrive"
+  "$HOME/Box"
+  "$HOME/Box Sync"
+  "$HOME/pCloud Drive"
+  "$HOME/Tresors"
+  "$HOME/Sync"
+  "$HOME/MEGA"
+  "$HOME/Nextcloud"
+  "$HOME/ownCloud"
+  "$HOME/Resilio Sync"
+  "$HOME/SynologyDrive"
 
   # Virtual machines (disk images can be tens of GB; never contain notebooks).
   "$HOME/.lume"
@@ -73,6 +106,7 @@ EXCLUDE_PATHS=(
   "$HOME/OrbStack"
   "$HOME/Parallels"
   "$HOME/VirtualBox VMs"
+  "$HOME/Virtual Machines.localized"
   "$HOME/.vagrant.d"
 )
 
@@ -88,31 +122,71 @@ EXCLUDE_NAMES=(
   .git .hg .svn
 
   # Package-manager / language caches
-  node_modules .npm .pnpm-store .yarn
+  node_modules .npm .pnpm-store .yarn .bun .deno
   .cargo .rustup .gem .nvm .rvm .pyenv
   .gradle .m2 .ivy2 .sbt
   .docker .vagrant .android
+  .composer .stack .cabal .opam .swiftpm .zig-cache .zls-cache
 
   # Python virtualenvs and tool caches
   .venv venv __pycache__ .pytest_cache .mypy_cache .ruff_cache .ipynb_checkpoints
+  .poetry .pdm .hatch .tox
+
+  # JS framework build/run caches
+  .expo .metro .parcel-cache .vite .astro .docusaurus .remix .cache-loader
 
   # Build artifacts
   target build dist out .next .nuxt .svelte-kit .turbo
 
+  # Containers / Kubernetes
+  .multipass .kube .minikube .podman .containers .rd
+
+  # Cloud SDKs / IaC
+  .terraform .terragrunt-cache .pulumi .serverless .azure .gcloud .helm .kustomize
+
+  # Editors / IDEs (state, not code)
+  .idea .zed .fleet .vscode-server .cursor-server
+
+  # ML / model caches
+  .ollama .huggingface
+
+  # macOS volume metadata at any depth
+  .fseventsd .Spotlight-V100 .DocumentRevisions-V100 .TemporaryItems
+
   # General caches
-  .cache .ccache .terraform
+  .cache .ccache
 )
 
 # --- Bundle-name prunes (Apple "package" directories) ------------------------
+# These look like directories on disk but are app-managed bundles. Pruning
+# *.app alone is the single biggest scan-time saver since app bundles appear
+# in dev tool installs (Xcode, Electron) outside ~/Applications.
 EXCLUDE_GLOBS=(
+  # Application + system code packages
+  '*.app' '*.framework' '*.bundle' '*.kext' '*.plugin' '*.component'
+  '*.mdimporter' '*.qlgenerator' '*.prefPane' '*.appex' '*.systemextension'
+
+  # Apple media libraries
   '*.photoslibrary' '*.musiclibrary' '*.tvlibrary' '*.imovielibrary'
-  '*.fcpbundle' '*.logicx' '*.band' '*.aplibrary'
-  # OmniGraffle / OmniOutliner / OmniPlan bundles
+  '*.aplibrary' '*.lrlibrary'
+
+  # Apple media projects
+  '*.fcpbundle' '*.fcpevent' '*.fcpproject' '*.logicx' '*.band'
+
+  # iWork (zip archives but appear as packages on macOS)
+  '*.pages' '*.numbers' '*.key'
+
+  # OmniGroup project bundles
   '*.graffle' '*.ooutline' '*.oplx'
-  # Final Cut / Motion bundles
-  '*.fcpevent' '*.fcpproject'
-  # Xcode workspace bundles (the `.xcworkspace`/`.xcodeproj` are dirs)
+
+  # Xcode bundles (the .xcworkspace/.xcodeproj are dirs)
   '*.xcworkspace' '*.xcodeproj'
+
+  # VM bundles
+  '*.pvm' '*.vmwarevm'
+
+  # Disk images (sparsebundles especially are directory-shaped)
+  '*.sparsebundle' '*.sparseimage'
 )
 
 # --- Build the find expression -----------------------------------------------

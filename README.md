@@ -11,7 +11,8 @@ It works for any number of notebooks scattered across your home directory. You d
 ## Design choices
 
 - **Polling, not file watching.** `zk index` is incremental and fast (mtime+size checks before re-parsing). On idle systems, a full cycle is well under a second of CPU and ~zero SSD writes. Polling is bulletproof across sleep/wake, immune to fswatch wedges, and trivial to debug.
-- **Whole-home scan with smart exclusions.** Default scans `$HOME` and prunes at directory boundaries: `~/Library`, `~/Pictures`, `~/Movies`, `~/Music`, VM disks, container caches, `node_modules`, language tool caches, Apple media bundles. The walk visits a few thousand directories on a typical Mac, not millions.
+- **Conservative allowlist by default, opt-in to broader scans.** Default scans common notebook locations (`~/Documents`, `~/Desktop`, `~/notes`, `~/Notes`, `~/Obsidian`, `~/Vault`). Override with `ZK_REINDEX_ROOTS=/path1:/path2`. Even with smart exclusions, scanning `~/dev` (with hundreds of cloned repos) takes 5-10s per cycle — `find` has to list every directory it doesn't prune, regardless of whether it's looking for `.zk`. The allowlist keeps the no-op cost under ~1 second on real workstations.
+- **Smart exclusions for any path being scanned.** Within whatever roots you pick, prunes at directory boundaries: `~/Library`, VM disks, container caches, `node_modules`, language tool caches, Apple media bundles, sync mounts. Keeps walks of large user dirs manageable.
 - **Stateless.** Each cycle is a fresh `find`. Add a notebook anywhere with `zk init` and it's picked up on the next cycle — no service restart.
 - **Nested-notebook dedup.** If notebook B is inside notebook A (e.g. a git submodule that's itself a notebook clone), only A is reindexed.
 
