@@ -31,7 +31,7 @@ Configuration via env vars (set in EnvironmentVariables below or shell):
   ZK_REINDEX_EXCLUDES Colon-separated extra paths to prune
 
 Logs: __HOME__/Library/Logs/zk-reindex-all.log
-Source: https://github.com/&lt;your-username&gt;/zk-reindex-launchd</string>
+Source: https://github.com/johntrandall/zk-reindex-launchd</string>
 
     <key>ProgramArguments</key>
     <array>

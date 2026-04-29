@@ -19,7 +19,7 @@ It works for any number of notebooks scattered across your home directory. You d
 ## Install
 
 ```bash
-git clone https://github.com/<your-username>/zk-reindex-launchd.git ~/dev/zk-reindex-launchd
+git clone https://github.com/johntrandall/zk-reindex-launchd.git ~/dev/zk-reindex-launchd
 cd ~/dev/zk-reindex-launchd
 
 # 1. Install the script
