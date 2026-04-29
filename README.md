@@ -35,42 +35,38 @@ The agent polls every 5 minutes (configurable). Idle cost is ~200ms wall time an
 ## Install
 
 ```bash
-git clone https://github.com/johntrandall/zk-reindex-launchd.git ~/dev/zk-reindex-launchd
-cd ~/dev/zk-reindex-launchd
+git clone https://github.com/johntrandall/zk-reindex-launchd.git
+cd zk-reindex-launchd
+./install.sh
+```
 
-# 1. Install the script
-mkdir -p ~/.local/bin
-install -m 755 bin/zk-reindex-all ~/.local/bin/zk-reindex-all
+The installer:
 
-# 2. Generate and install the LaunchAgent plist
-mkdir -p ~/Library/LaunchAgents ~/Library/Logs
-sed "s|__HOME__|$HOME|g" launchd/com.zk-reindex-all.plist \
-  > ~/Library/LaunchAgents/com.zk-reindex-all.plist
+- Installs `bin/zk-reindex-all` to `~/.local/bin/`
+- Renders the plist template into `~/Library/LaunchAgents/com.zk-reindex-all.plist` (substituting `__HOME__` for your real `$HOME`)
+- Seeds a starter `~/.config/zk-reindex-launchd/notebooks.conf` if you don't have one
+- Bootstraps the LaunchAgent (idempotent — re-run anytime to re-install)
 
-# 3. Bootstrap the LaunchAgent (also runs immediately due to RunAtLoad)
-launchctl bootstrap gui/$(id -u) \
-  ~/Library/LaunchAgents/com.zk-reindex-all.plist
+Then edit your config:
+
+```bash
+$EDITOR ~/.config/zk-reindex-launchd/notebooks.conf
+# Add one line per notebook root: <absolute path>[:<maxdepth>]
+# Saves take effect on the next cycle — no reload needed.
 ```
 
 Verify:
 
 ```bash
-# Should show the LaunchAgent
 launchctl list | grep zk-reindex-all
-
-# Tail the log to see reindexes happen
 tail -f ~/Library/Logs/zk-reindex-all.log
 ```
 
 ## Uninstall
 
 ```bash
-launchctl bootout gui/$(id -u) \
-  ~/Library/LaunchAgents/com.zk-reindex-all.plist
-
-trash ~/Library/LaunchAgents/com.zk-reindex-all.plist
-trash ~/.local/bin/zk-reindex-all
-trash ~/Library/Logs/zk-reindex-all.log
+./uninstall.sh           # keeps your notebooks.conf
+./uninstall.sh --purge   # also removes ~/.config/zk-reindex-launchd/
 ```
 
 ## Configuration
