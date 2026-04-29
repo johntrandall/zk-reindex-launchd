@@ -11,7 +11,8 @@ Where this tool is announced, what's been done, and what's next. Maintained as t
 | awesome-zettelkasten | Zettelkasten community discovering tools | ⏳ PR open | 2026-04-29 | [PR #8](https://github.com/fhoehl/awesome-zettelkasten/pull/8) addition; [PR #9](https://github.com/fhoehl/awesome-zettelkasten/pull/9) link fix (separate) |
 | zk-org/zk Discussion ([#700](https://github.com/zk-org/zk/discussions/700)) | zk community | ✅ posted | 2026-04-29 | "Share" category, modest tone |
 | r/Zettelkasten Self-Promo monthly thread | Zettelkasten users on Reddit | ✅ posted Apr | 2026-04-29 | Comment in [Apr 2026 thread](https://www.reddit.com/r/Zettelkasten/comments/1s9yh59/comment/oiz0et8/). Posted as `johntrandall`. |
-| `koei-kaji/zk-mcp` README | Users of the MCP wrapper that benefits most | ⏳ planned | — | Highest precision channel — these users have the staleness problem this tool solves |
+| `koei-kaji/zk-mcp` README | (was) MCP wrapper users | ❌ blocked | 2026-04-29 | Upstream archived 2026-01-01. Author replaced it with `koei-kaji/zk-utils` — see next row. |
+| `koei-kaji/zk-utils` README | Users of the maintained MCP wrapper successor | ⏳ PR open | 2026-04-29 | [PR #9](https://github.com/koei-kaji/zk-utils/pull/9). Highest precision channel — these users hit the staleness problem this tool solves. |
 | r/macapps | macOS dev-tool users | ⏳ planned | — | Top-level post; johntrandall account |
 | Show HN | Generalist tech audience | ⏳ planned (low expectation) | — | Cheap submission; flop is acceptable |
 | lobste.rs | Unix/macOS dev tooling | ❌ skip unless invited | — | Requires invite |
@@ -36,7 +37,7 @@ A fresh `<Month> <Year> Self-Promotions | Tools, Books, and Courses` thread is a
 - **Once per major release** is the implicit rule everywhere. Don't re-post the same content if nothing's changed.
 
 ### "Best place to spend marketing effort"
-**The koei-kaji/zk-mcp README mention.** Anyone running an MCP wrapper over zk has the *exact* problem this tool solves. A single inline reference in those docs outperforms a dozen Reddit posts because it's there at the moment of need.
+**The koei-kaji/zk-utils README mention.** Anyone running an MCP wrapper over zk has the *exact* problem this tool solves. A single inline reference in those docs outperforms a dozen Reddit posts because it's there at the moment of need. (Originally targeted `koei-kaji/zk-mcp`, but that repo was archived 2026-01-01; the same author's `zk-utils` is the active successor.)
 
 ## Account routing
 
