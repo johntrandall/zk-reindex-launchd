@@ -50,7 +50,7 @@ brew test johntrandall/tap/zk-reindex-launchd
 
 ## 5. (Optional) Promote the release
 
-If the change is user-visible, mention in the next month's r/Zettelkasten Self-Promotions thread (per `OUTREACH.md`'s cadence rules — only re-post when there's actual news).
+If the change is user-visible, mention in the next month's r/Zettelkasten Self-Promotions thread. Only re-post when there's actual news (new feature, real bug-fix, community-requested behavior) — repeating the same announcement reads as spam to subreddit regulars.
 
 ## Versioning policy
 
