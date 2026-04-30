@@ -1,0 +1,63 @@
+name: lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  shellcheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: ShellCheck
+        # ShellCheck the bash entrypoints. -x follows sourced files (none currently).
+        run: |
+          shellcheck \
+            bin/zk-reindex-all \
+            install.sh \
+            uninstall.sh
+
+  plist-validate:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: plutil syntax check
+        run: |
+          plutil -lint launchd/com.zk-reindex-all.plist
+
+  smoke-test-installer:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install zk via Homebrew
+        run: brew install zk
+      - name: Run installer in a sandboxed HOME
+        env:
+          TEST_HOME: ${{ runner.temp }}/test-home
+        run: |
+          mkdir -p "$TEST_HOME"
+          HOME="$TEST_HOME" ./install.sh
+          # Verify files landed
+          test -x "$TEST_HOME/.local/bin/zk-reindex-all"
+          test -f "$TEST_HOME/Library/LaunchAgents/com.zk-reindex-all.plist"
+          test -f "$TEST_HOME/.config/zk-reindex-launchd/notebooks.conf"
+          # Verify __HOME__ substitution
+          ! grep -q '__HOME__' "$TEST_HOME/Library/LaunchAgents/com.zk-reindex-all.plist"
+      - name: Run uninstaller (preserves config)
+        env:
+          TEST_HOME: ${{ runner.temp }}/test-home
+        run: |
+          HOME="$TEST_HOME" ./uninstall.sh
+          test ! -x "$TEST_HOME/.local/bin/zk-reindex-all"
+          test ! -f "$TEST_HOME/Library/LaunchAgents/com.zk-reindex-all.plist"
+          test -f "$TEST_HOME/.config/zk-reindex-launchd/notebooks.conf"
+      - name: Run uninstaller --purge
+        env:
+          TEST_HOME: ${{ runner.temp }}/test-home
+        run: |
+          HOME="$TEST_HOME" ./uninstall.sh --purge
+          test ! -d "$TEST_HOME/.config/zk-reindex-launchd"
