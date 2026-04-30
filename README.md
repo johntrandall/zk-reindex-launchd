@@ -2,6 +2,16 @@
 
 A set-and-forget background reindexer for [zk](https://github.com/zk-org/zk) (the plain-text Zettelkasten CLI) on macOS. One LaunchAgent quietly runs [`zk index`](https://zk-org.github.io/zk/notes/note-frontmatter.html) across every notebook on your Mac on a schedule. Install once, edit your notes for years, never think about indexing again.
 
+## Glossary (skip if you live in the terminal)
+
+Quick translations for terms used throughout this README:
+
+- **[zk](https://github.com/zk-org/zk)** — a Zettelkasten CLI. Stores notes as plain markdown files in a "notebook" directory. Provides commands like `zk list`, `zk graph`, `zk new`.
+- **`zk index`** — the command that scans the markdown files and updates the SQLite database backing zk's link graph, tag list, and full-text search. Without a current index, queries like "what links to this note?" return stale answers.
+- **[LSP](https://zk-org.github.io/zk/tips/editors-integration.html)** (Language Server Protocol) — a standard editors use to talk to language tools. zk ships an LSP that some editors (Neovim/VSCode/Emacs) talk to; saving through one of those editors auto-runs `zk index`. Edits from anywhere else skip that.
+- **launchd** — macOS's built-in service scheduler (think systemd for Mac). Runs background tasks on a timer or at login. This tool installs a single launchd entry that runs `zk index` every 5 minutes.
+- **MCP** (Model Context Protocol) — the standard interface AI agents use to call tools. Some MCP wrappers around zk (e.g. [koei-kaji/zk-utils](https://github.com/koei-kaji/zk-utils)) auto-reindex on every query — meaning their users get freshness without this tool. This tool helps when your zk notebook is also touched by anything *outside* an auto-reindexing path.
+
 ## Why
 
 [`zk index`](https://github.com/zk-org/zk) is incremental and fast — but it's manual. Every edit you make is invisible to `zk list`, `zk graph`, the [zk LSP](https://zk-org.github.io/zk/tips/editors-integration.html), or any consumer that doesn't auto-reindex on its own. The zk LSP auto-reindexes when *the LSP itself* saves the file. Some MCP wrappers like [`koei-kaji/zk-utils`](https://github.com/koei-kaji/zk-utils) auto-reindex on every tool call. But anything else — the bare CLI from a shell, edits via sync tools, mobile note apps writing to the vault, AI agents writing markdown directly to disk — leaves the index stale until a privileged consumer triggers a refresh.
